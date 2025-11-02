@@ -1,4 +1,4 @@
-package com.digittransway
+package com.digit.digittransport
 
 import android.app.Application
 import com.facebook.react.PackageList

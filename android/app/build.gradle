@@ -2,6 +2,15 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// This code loads your key.properties file
+def keyPropertiesFile = rootProject.file("key.properties")
+def keyProperties = new Properties()
+if (keyPropertiesFile.exists()) {
+    keyPropertiesFile.withReader('UTF-8') { reader ->
+        keyProperties.load(reader)
+    }
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -77,13 +86,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.digittransway"
+    namespace "com.digit.digittransport"
     defaultConfig {
-        applicationId "com.digittransway"
+        applicationId "com.digit.digittransport"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 6
+        versionName "3.3"
     }
     signingConfigs {
         debug {
@@ -91,6 +100,15 @@ android {
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'
+        }
+        // This is your new release config
+        release {
+            if (keyPropertiesFile.exists()) {
+                storeFile file(rootProject.file(keyProperties.MY_STORE_FILE))
+                storePassword keyProperties.MY_STORE_PASSWORD
+                keyAlias keyProperties.MY_KEY_ALIAS
+                keyPassword keyProperties.MY_KEY_PASSWORD
+            }
         }
     }
     buildTypes {
@@ -100,7 +118,10 @@ android {
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            
+            // THIS IS THE MOST IMPORTANT CHANGE
+            signingConfig signingConfigs.release
+            
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
@@ -117,3 +138,5 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
