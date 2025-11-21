@@ -8,7 +8,7 @@ import {
   ScrollView,
   RefreshControl,
   StatusBar,
-  Image, // Import Image component
+  Image,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
@@ -32,6 +32,19 @@ const HomeScreen = () => {
     type: '',
   });
 
+  // ------------------------------------------------------------------
+  // 🚀 FIXED FUNCTION: Use Nested Navigation Syntax without redundant params
+  // ------------------------------------------------------------------
+  const goToMyTripsTab = tabName => {
+    navigation.navigate(
+      'My Trips', // 1. Bottom Tab name
+      {
+        screen: tabName, // 2. Top Tab Screen name (e.g., 'CancelledBookings')
+      },
+    );
+  };
+  // ------------------------------------------------------------------
+
   const showSnackbar = (message, type) => {
     setSnackbar({ visible: true, message, type });
     setTimeout(
@@ -41,6 +54,7 @@ const HomeScreen = () => {
   };
 
   const fetchBookingSummary = async () => {
+    // ... (existing fetch logic)
     setError('');
     try {
       const token = await AsyncStorage.getItem('@user_token');
@@ -84,13 +98,23 @@ const HomeScreen = () => {
     fetchBookingSummary();
   }, []);
 
-  const renderSummaryCard = (label, count, iconName, color) => (
-    <View style={styles.summaryCard}>
-      <Icon name={iconName} size={30} color={color} />
-      <Text style={styles.summaryCount}>{count ?? '0'}</Text>
-      <Text style={styles.summaryLabel}>{label}</Text>
-    </View>
+  // ------------------------------------------------------------------
+  // 🔄 MODIFIED: renderSummaryCard remains the same
+  // ------------------------------------------------------------------
+  const renderSummaryCard = (label, count, iconName, color, tabRouteName) => (
+    <TouchableOpacity // 👈 Wrap the card in TouchableOpacity
+      style={styles.summaryCardTouchable}
+      onPress={() => goToMyTripsTab(tabRouteName)}
+      disabled={count === 0 && label !== 'Pending'} // Optionally disable if count is 0
+    >
+      <View style={styles.summaryCard}>
+        <Icon name={iconName} size={30} color={color} />
+        <Text style={styles.summaryCount}>{count ?? '0'}</Text>
+        <Text style={styles.summaryLabel}>{label}</Text>
+      </View>
+    </TouchableOpacity>
   );
+  // ------------------------------------------------------------------
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -106,11 +130,11 @@ const HomeScreen = () => {
           />
         }
       >
-        {/* --- NEW WELCOME HEADER --- */}
+        {/* --- WELCOME HEADER --- */}
         <View style={styles.welcomeContainer}>
-          <Text style={styles.welcomeTitle}>Welcome Back!</Text>
+          <Text style={styles.welcomeTitle}>Welcome Back! 👋</Text>
           <Text style={styles.welcomeSubtitle}>
-            Here's your activity summary.
+            Check out your trip statistics.
           </Text>
         </View>
 
@@ -126,52 +150,42 @@ const HomeScreen = () => {
           <Text style={styles.errorText}>Error: {error}</Text>
         )}
 
-        {/* --- SUMMARY CARDS (Unchanged) --- */}
+        {/* --- SUMMARY CARDS (Mapping status to Top Tab Route Names) --- */}
         {!loading && !error && summary && (
           <View style={styles.summaryGrid}>
+            {/* Map 'Pending' to 'PendingBookings' tab */}
             {renderSummaryCard(
               'Pending',
               summary.pending_count,
               'hourglass-empty',
               '#FFA000',
+              'PendingBookings', // 👈 Top Tab Route Name
             )}
+            {/* Map 'Active' to 'ActiveBookings' tab */}
             {renderSummaryCard(
               'Active',
               summary.active_count,
               'local-shipping',
               '#1976D2',
+              'ActiveBookings', // 👈 Top Tab Route Name
             )}
+            {/* Map 'Completed' to 'CompletedBookings' tab */}
             {renderSummaryCard(
               'Completed',
               summary.completed_count,
               'check-circle',
               '#388E3C',
+              'CompletedBookings', // 👈 Top Tab Route Name
             )}
+            {/* Map 'Cancelled' to 'CancelledBookings' tab */}
             {renderSummaryCard(
               'Cancelled',
               summary.cancelled_count,
               'cancel',
               '#D32F2F',
+              'CancelledBookings', // 👈 Top Tab Route Name
             )}
           </View>
-        )}
-
-        {/* --- NEW PROMOTIONAL BANNER --- */}
-        {!loading && (
-          <TouchableOpacity
-            style={styles.promoCard}
-            onPress={() => {
-              /* Can navigate to a 'Promotions' screen or similar */
-            }}
-          >
-            <Image source={truckhero} style={styles.promoImage} />
-            <View style={styles.promoTextContainer}>
-              <Text style={styles.promoTitle}>Long-Haul Special</Text>
-              <Text style={styles.promoSubtitle}>
-                Get 10% off on all bookings over 500km this month.
-              </Text>
-            </View>
-          </TouchableOpacity>
         )}
 
         {/* --- BOOK BUTTON (Unchanged) --- */}
@@ -208,7 +222,7 @@ const styles = StyleSheet.create({
   // --- NEW WELCOME STYLES ---
   welcomeContainer: {
     marginBottom: 24,
-    alignItems: 'flex-center',
+    alignItems: 'center', // Fix for 'flex-center'
   },
   welcomeTitle: {
     fontSize: 26,
@@ -228,12 +242,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 15, // Reduced margin
   },
+  summaryCardTouchable: {
+    width: '48%',
+    marginBottom: 15,
+  },
   summaryCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 8,
-    width: '48%',
-    marginBottom: 15,
     alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
@@ -306,6 +322,32 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     fontSize: 16,
   },
+    summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  // 👈 NEW STYLE: Touchable wrapper for layout
+  summaryCardTouchable: {
+    width: '48%',
+    marginBottom: 15,
+  },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 8,
+    // width: '100%', // Removed since parent handles width
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
 });
 
 export default HomeScreen;
+
+
+

@@ -16,6 +16,8 @@ import SubscriptionScreen from "./src/screens/main/SubscriptionScreen"
 import NewBookingScreen from './src/screens/main/NewBookingScreen';
 import ReferralScreen from './src/screens/main/ReferralScreen';
 import MySubscriptionScreen from './src/screens/main/MySubscriptionScreen';
+import ReviewScreen from './src/screens/main/ReviewScreen';
+import AadhaarWebView from './src/screens/auth/AadhaarWebView';
 
 const Stack = createNativeStackNavigator();
 
@@ -47,6 +49,16 @@ function App() {
           <Stack.Screen name="NewBooking" component={NewBookingScreen} />
           <Stack.Screen name="Referral" component={ReferralScreen} />
           <Stack.Screen name="MySubscription" component={MySubscriptionScreen} />
+          <Stack.Screen name="ReviewScreen" component={ReviewScreen} />
+          <Stack.Screen
+            name="AadhaarWebView"
+            component={AadhaarWebView}
+            options={{
+              title: 'Aadhaar Verification',
+              headerShown: true,
+              headerBackTitle: 'Cancel',
+            }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

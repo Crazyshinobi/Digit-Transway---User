@@ -19,7 +19,7 @@ const AuthLoadingScreen = () => {
         // 1. Check local storage
         token = await AsyncStorage.getItem('@user_token');
         storedPhoneNumber = await AsyncStorage.getItem('@user_phone_number');
-
+        console.log("Token", token)
         if (!token || !storedPhoneNumber) {
           console.log('[AuthLoading] No session found. Navigating to Login.');
           navigation.replace('Login');

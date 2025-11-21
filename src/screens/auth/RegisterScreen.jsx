@@ -11,9 +11,9 @@ import {
   Linking,
   ActivityIndicator,
   Alert,
-  PermissionsAndroid, // <-- ADD THIS
-  KeyboardAvoidingView, // For keyboard responsiveness
-  Platform, // For platform-specific behavior
+  PermissionsAndroid,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Dropdown } from 'react-native-element-dropdown';
@@ -84,16 +84,17 @@ const countryData = [{ label: 'India', value: 'India' }];
 const RegisterScreen = () => {
   const navigation = useNavigation();
 
-  // --- State Management (UPDATED) ---
+  // --- State Management (Optional fields) ---
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     dob: '',
     emergency_contact: '',
     pan_number: '',
+    gst_number: '', // NEW FIELD
     full_address: '',
     pincode: '',
-    bank_name: '', // Will be auto-filled
+    bank_name: '',
     account_number: '',
     ifsc: '',
     gender: 'male',
@@ -111,7 +112,7 @@ const RegisterScreen = () => {
   const [registrationLoading, setRegistrationLoading] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
 
-  // --- NEW Bank Verification State ---
+  // --- Bank Verification State ---
   const [bankVerifyLoading, setBankVerifyLoading] = useState(false);
   const [isBankVerified, setIsBankVerified] = useState(false);
   const [verifiedAccountHolder, setVerifiedAccountHolder] = useState('');
@@ -123,7 +124,7 @@ const RegisterScreen = () => {
     type: '',
   });
 
-  // --- UPDATED handleInputChange for PAN, IFSC, and Bank Verification Reset ---
+  // --- UPDATED handleInputChange for PAN, IFSC, GST, and Bank Verification Reset ---
   const handleInputChange = (field, value) => {
     let processedValue = value;
 
@@ -131,14 +132,15 @@ const RegisterScreen = () => {
       processedValue = value.toUpperCase().slice(0, 10);
     } else if (field === 'ifsc') {
       processedValue = value.toUpperCase().slice(0, 11);
+    } else if (field === 'gst_number') {
+      processedValue = value.toUpperCase().slice(0, 15);
     }
 
-    // --- NEW: Reset bank verification if details change ---
+    // --- Reset bank verification if details change ---
     if (field === 'account_number' || field === 'ifsc') {
       if (isBankVerified) {
         setIsBankVerified(false);
         setVerifiedAccountHolder('');
-        // Also clear the bank_name field
         setFormData(prev => ({ ...prev, bank_name: '' }));
       }
     }
@@ -155,25 +157,6 @@ const RegisterScreen = () => {
       3000,
     );
   };
-
-  // --- Deep Link Listener (Unchanged) ---
-  useEffect(() => {
-    const handleDeepLink = async event => {
-      const { url } = event;
-      if (url && url.includes('digittransway://aadhaar-callback')) {
-        const params = new URLSearchParams(url.split('?')[1]);
-        const clientId = params.get('client_id');
-        if (clientId) {
-          await verifyAadhaarData(clientId);
-        }
-      }
-    };
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-    Linking.getInitialURL().then(url => {
-      if (url) handleDeepLink({ url });
-    });
-    return () => subscription.remove();
-  }, []);
 
   // --- Pincode Data Fetching (Unchanged) ---
   const fetchLocationData = async pincode => {
@@ -273,20 +256,26 @@ const RegisterScreen = () => {
         navigation.navigate('Login');
         return;
       }
+
       const response = await axios.post(
         `${API_URL}/api/auth/aadhaar/initialize`,
         {
-          redirect_url: 'https://digittransway.in/aadhaar-callback',
+          redirect_url: 'https://digittransway.in/aadhaar-callback.php',
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
+
       if (response.data.success && response.data.data.verification_url) {
-        const url = response.data.data.verification_url;
-        if (await Linking.canOpenURL(url)) {
-          await Linking.openURL(url);
-        } else {
-          showSnackbar('Cannot open verification link.', 'error');
-        }
+        const verificationUrl = response.data.data.verification_url;
+
+        // Open WebView instead of external browser
+        navigation.navigate('AadhaarWebView', {
+          verificationUrl,
+          onVerificationComplete: async (clientId, status) => {
+            console.log('Verification complete:', clientId, status);
+            await verifyAadhaarData(clientId);
+          },
+        });
       } else {
         throw new Error(
           response.data.message || 'Failed to initialize Aadhaar.',
@@ -300,12 +289,9 @@ const RegisterScreen = () => {
     } finally {
       setAadhaarLoading(false);
     }
-  }; // Options for both camera and gallery
+  };
 
-  // --- File Picker (UPDATED) ---
-  // --- File Picker (UPDATED with Camera Permissions) ---
-
-  // Options for both camera and gallery
+  // --- File Picker functions (Unchanged) ---
   const imagePickerOptions = {
     mediaType: 'photo',
     includeBase64: false,
@@ -314,7 +300,6 @@ const RegisterScreen = () => {
     quality: 0.8,
   };
 
-  // Reusable function to handle the result from the image picker
   const handleImagePickerResult = (result, setFile) => {
     if (result.didCancel) {
       console.log('User cancelled image picker');
@@ -331,10 +316,9 @@ const RegisterScreen = () => {
     }
   };
 
-  // *** NEW: Function to request camera permission on Android ***
   const requestCameraPermission = async () => {
     if (Platform.OS !== 'android') {
-      return true; // Not needed for iOS
+      return true;
     }
     try {
       const granted = await PermissionsAndroid.request(
@@ -359,15 +343,11 @@ const RegisterScreen = () => {
     }
   };
 
-  // Function to open the camera (UPDATED)
   const openCamera = async setFile => {
-    // First, request permission
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) {
-      return; // Don't proceed if permission is not granted
+      return;
     }
-
-    // Launch camera if permission is granted
     try {
       const result = await launchCamera(imagePickerOptions);
       handleImagePickerResult(result, setFile);
@@ -377,7 +357,6 @@ const RegisterScreen = () => {
     }
   };
 
-  // Function to open the gallery (Unchanged)
   const openGallery = async setFile => {
     try {
       const result = await launchImageLibrary(imagePickerOptions);
@@ -388,7 +367,6 @@ const RegisterScreen = () => {
     }
   };
 
-  // Main function called by the "Upload" buttons (Unchanged)
   const handleFilePick = async setFile => {
     Alert.alert(
       'Select Document Source',
@@ -411,9 +389,9 @@ const RegisterScreen = () => {
     );
   };
 
-  // --- *** NEW: Bank Verification Function *** ---
+  // --- Bank Verification Function (Unchanged) ---
   const handleBankVerification = async () => {
-    // Client-side validation
+    // Client-side validation: must have account/ifsc if they press the button
     if (!formData.account_number || !formData.ifsc) {
       showSnackbar('Please enter Account Number and IFSC code.', 'error');
       return;
@@ -425,8 +403,8 @@ const RegisterScreen = () => {
     }
 
     setBankVerifyLoading(true);
-    setIsBankVerified(false); // Reset on new attempt
-    setVerifiedAccountHolder(''); // Reset
+    setIsBankVerified(false);
+    setVerifiedAccountHolder('');
 
     try {
       const token = await AsyncStorage.getItem('@user_token');
@@ -447,7 +425,6 @@ const RegisterScreen = () => {
         const data = response.data.data;
         setIsBankVerified(true);
         setVerifiedAccountHolder(data.account_holder_name);
-        // Auto-fill the bank_name from response
         handleInputChange('bank_name', data.bank_details.bank_name);
         showSnackbar('Bank account verified successfully!', 'success');
       } else {
@@ -457,7 +434,6 @@ const RegisterScreen = () => {
       }
     } catch (err) {
       showSnackbar(err.response?.data?.message || err.message, 'error');
-      // Ensure state is reset on failure
       setIsBankVerified(false);
       setVerifiedAccountHolder('');
       handleInputChange('bank_name', '');
@@ -465,51 +441,37 @@ const RegisterScreen = () => {
       setBankVerifyLoading(false);
     }
   };
-  // --- *** END: Bank Verification Function *** ---
 
-  // --- UPDATED Handle Final Registration ---
+  // --- UPDATED Handle Final Registration (Bank/Document checks removed) ---
   const handleRegistration = async () => {
-    // Basic Field Validation Loop
-    for (const key in formData) {
-      if (!formData[key]) {
-        // Checks for null, undefined, empty string
-        if (key === 'state' || key === 'city') {
-          showSnackbar(
-            'Please enter a valid PIN code to auto-fill State and City.',
-            'error',
-          );
-          return;
-        }
-        showSnackbar(
-          `Please fill out the ${key.replace(/_/g, ' ')} field.`,
-          'error',
-        );
-        return;
-      }
+    // --- REQUIRED VALIDATION CHECKS ---
+
+    // 1. Aadhaar Verification is the ONLY strictly REQUIRED step
+    if (!isAadhaarVerified) {
+      showSnackbar('Aadhaar verification is required to register.', 'error');
+      return;
     }
 
-    // --- PAN Validation ---
+    // 2. PAN Validation (if entered)
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    if (!panRegex.test(formData.pan_number)) {
+    if (formData.pan_number.length > 0 && !panRegex.test(formData.pan_number)) {
       showSnackbar(
-        'Please enter a valid PAN number format (e.g., ABCDE1234F).',
+        'If entered, PAN must be in a valid format (e.g., ABCDE1234F).',
         'error',
       );
       return;
     }
 
-    // Document Upload Validation
-    if (!panImage || !aadhaarFront || !aadhaarBack) {
-      showSnackbar('Please upload all required documents.', 'error');
+    // 3. Pincode and Location Check (If pincode is entered, city/state must be filled)
+    if (formData.pincode.length === 6 && (!formData.state || !formData.city)) {
+      showSnackbar(
+        'Pincode lookup failed. Please re-enter a valid PIN code or clear the field.',
+        'error',
+      );
       return;
     }
 
-    // --- NEW: Bank Verification Check ---
-    if (!isBankVerified) {
-      showSnackbar('Please verify your bank account details.', 'error');
-      return;
-    }
-    // --- END: Bank Verification Check ---
+    // NOTE: isBankVerified and document uploads (panImage, aadhaarFront, aadhaarBack) are now OPTIONAL.
 
     setRegistrationLoading(true);
     try {
@@ -518,6 +480,7 @@ const RegisterScreen = () => {
 
       const data = new FormData();
       Object.keys(formData).forEach(key => {
+        // Only append fields that are not null or undefined
         if (formData[key] !== null) {
           data.append(key, formData[key]);
         }
@@ -525,13 +488,19 @@ const RegisterScreen = () => {
       data.append('same_address', isAddressSame ? 'true' : 'false');
       data.append('declaration', 'true');
 
+      // Documents are appended IF they exist
       if (panImage) data.append('pan_image', panImage);
       if (aadhaarFront) data.append('aadhar_front', aadhaarFront);
       if (aadhaarBack) data.append('aadhar_back', aadhaarBack);
 
       console.log('--- Submitting Registration FormData ---');
       data._parts.forEach(part => {
-        console.log(part[0], ':', part[1]);
+        // Logging sensitive data for debug purposes is fine in this context, but note the data type
+        const value =
+          typeof part[1] === 'object' && part[1] !== null
+            ? part[1].name
+            : part[1];
+        console.log(part[0], ':', value);
       });
       console.log('------------------------------------');
 
@@ -565,7 +534,7 @@ const RegisterScreen = () => {
     }
   };
 
-  // --- Render Method (UPDATED BANK DETAILS SECTION) ---
+  // --- Render Method (UPDATED with optional labels) ---
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F7F8FA" />
@@ -590,19 +559,24 @@ const RegisterScreen = () => {
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* AADHAAR Section (Unchanged) */}
-          <FormSection title="AADHAAR VERIFICATION">
+          {/* AADHAAR Section (Aadhaar Verification is now CRITICAL) */}
+          <FormSection title="AADHAAR VERIFICATION (Required)">
             {isAadhaarVerified ? (
               <View style={styles.verifiedBox}>
                 <Text style={styles.verifiedText}>
-                  ✓ Aadhaar Verified Successfully
+                  ✅ Aadhaar Verified Successfully
+                </Text>
+                <Text style={styles.verifiedTextHint}>
+                  (Registration will only proceed with successful Aadhaar
+                  verification)
                 </Text>
               </View>
             ) : (
               <>
                 <View style={styles.infoBox}>
                   <Text style={styles.infoText}>
-                    Verify your Aadhaar to auto-fill your details securely
+                    Verify your Aadhaar to auto-fill your details securely.
+                    **(Required for Registration)**
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -625,16 +599,16 @@ const RegisterScreen = () => {
             )}
           </FormSection>
 
-          {/* BASIC DETAILS Section (Unchanged) */}
-          <FormSection title="BASIC DETAILS">
+          {/* BASIC DETAILS Section (Fields are now OPTIONAL) */}
+          <FormSection title="BASIC DETAILS (Optional)">
             <CustomTextInput
-              label="Full Name*"
+              label="Full Name"
               value={formData.name}
               onChangeText={val => handleInputChange('name', val)}
               placeholder="Enter your full name"
             />
             <CustomTextInput
-              label="Email Address*"
+              label="Email Address"
               value={formData.email}
               onChangeText={val => handleInputChange('email', val)}
               placeholder="Enter email"
@@ -642,12 +616,12 @@ const RegisterScreen = () => {
               autoCapitalize="none"
             />
             <CustomTextInput
-              label="Date of Birth*"
+              label="Date of Birth (YYYY-MM-DD)"
               value={formData.dob}
               onChangeText={val => handleInputChange('dob', val)}
               placeholder="YYYY-MM-DD"
             />
-            <Text style={styles.label}>Select Gender*</Text>
+            <Text style={styles.label}>Select Gender</Text>
             <View style={styles.genderSelector}>
               {['male', 'female', 'other'].map(option => (
                 <TouchableOpacity
@@ -676,7 +650,7 @@ const RegisterScreen = () => {
               ))}
             </View>
             <CustomTextInput
-              label="Emergency Contact Number*"
+              label="Emergency Contact Number"
               value={formData.emergency_contact}
               onChangeText={val => handleInputChange('emergency_contact', val)}
               placeholder="Enter 10 digit number"
@@ -685,17 +659,17 @@ const RegisterScreen = () => {
             />
           </FormSection>
 
-          {/* DOCUMENTS Section (Unchanged) */}
-          <FormSection title="DOCUMENTS">
+          {/* DOCUMENTS Section (Documents are now OPTIONAL) */}
+          <FormSection title="DOCUMENTS & IDS (Optional)">
             <CustomTextInput
-              label="Aadhaar Number*"
+              label="Aadhaar Number"
               value={formData.aadhar_number}
               onChangeText={val => handleInputChange('aadhar_number', val)}
               placeholder="Enter Aadhaar Number"
               keyboardType="number-pad"
               maxLength={12}
             />
-            <Text style={styles.label}>Aadhaar Front*</Text>
+            <Text style={styles.label}>Aadhaar Front</Text>
             <TouchableOpacity
               style={styles.uploadBox}
               onPress={() => handleFilePick(setAadhaarFront)}
@@ -707,10 +681,10 @@ const RegisterScreen = () => {
               >
                 {aadhaarFront
                   ? aadhaarFront.name
-                  : '📎 Click to Upload Aadhaar Front'}
+                  : '📎 Click to Upload Aadhaar Front (Optional)'}
               </Text>
             </TouchableOpacity>
-            <Text style={[styles.label, { marginTop: 16 }]}>Aadhaar Back*</Text>
+            <Text style={[styles.label, { marginTop: 16 }]}>Aadhaar Back</Text>
             <TouchableOpacity
               style={styles.uploadBox}
               onPress={() => handleFilePick(setAadhaarBack)}
@@ -722,18 +696,18 @@ const RegisterScreen = () => {
               >
                 {aadhaarBack
                   ? aadhaarBack.name
-                  : '📎 Click to Upload Aadhaar Back'}
+                  : '📎 Click to Upload Aadhaar Back (Optional)'}
               </Text>
             </TouchableOpacity>
             <CustomTextInput
-              label="PAN Number*"
+              label="PAN Number"
               value={formData.pan_number}
               onChangeText={val => handleInputChange('pan_number', val)}
               placeholder="Enter PAN number"
               maxLength={10}
               autoCapitalize="characters"
             />
-            <Text style={styles.label}>PAN Card*</Text>
+            <Text style={styles.label}>PAN Card</Text>
             <TouchableOpacity
               style={styles.uploadBox}
               onPress={() => handleFilePick(setPanImage)}
@@ -743,15 +717,27 @@ const RegisterScreen = () => {
                 numberOfLines={1}
                 ellipsizeMode="middle"
               >
-                {panImage ? panImage.name : '📎 Click to Upload PAN Card'}
+                {panImage
+                  ? panImage.name
+                  : '📎 Click to Upload PAN Card (Optional)'}
               </Text>
             </TouchableOpacity>
+            {/* GST Input */}
+            <CustomTextInput
+              label="GST Number"
+              value={formData.gst_number}
+              onChangeText={val => handleInputChange('gst_number', val)}
+              placeholder="Enter GST number (Optional)"
+              maxLength={15}
+              autoCapitalize="characters"
+            />
+            {/* End GST Input */}
           </FormSection>
 
-          {/* ADDRESS DETAILS Section (Unchanged) */}
-          <FormSection title="ADDRESS DETAILS">
+          {/* ADDRESS DETAILS Section (Fields are now OPTIONAL) */}
+          <FormSection title="ADDRESS DETAILS (Optional)">
             <CustomTextInput
-              label="Full Address*"
+              label="Full Address"
               value={formData.full_address}
               onChangeText={val => handleInputChange('full_address', val)}
               placeholder="Enter complete address"
@@ -760,7 +746,7 @@ const RegisterScreen = () => {
             <View style={styles.row}>
               <View style={styles.halfWidth}>
                 <CustomTextInput
-                  label="State*"
+                  label="State"
                   value={formData.state || ''}
                   placeholder="Auto-filled from PIN"
                   editable={false}
@@ -768,7 +754,7 @@ const RegisterScreen = () => {
               </View>
               <View style={styles.halfWidth}>
                 <CustomTextInput
-                  label="City*"
+                  label="City"
                   value={formData.city || ''}
                   placeholder="Auto-filled from PIN"
                   editable={false}
@@ -779,7 +765,7 @@ const RegisterScreen = () => {
               <View style={styles.halfWidth}>
                 <View>
                   <CustomTextInput
-                    label="PIN Code*"
+                    label="PIN Code"
                     value={formData.pincode}
                     onChangeText={val =>
                       handleInputChange('pincode', val.replace(/[^0-9]/g, ''))
@@ -798,7 +784,7 @@ const RegisterScreen = () => {
               </View>
               <View style={styles.halfWidth}>
                 <CustomDropdown
-                  label="Country*"
+                  label="Country"
                   data={countryData}
                   placeholder="Select Country"
                   value={formData.country}
@@ -819,32 +805,33 @@ const RegisterScreen = () => {
             </View>
           </FormSection>
 
-          {/* --- *** UPDATED BANK DETAILS Section *** --- */}
-          <FormSection title="BANK DETAILS">
+          {/* BANK DETAILS Section (Verification is now OPTIONAL) */}
+          <FormSection title="BANK DETAILS (Optional)">
             <CustomTextInput
-              label="Bank Name*"
+              label="Bank Name"
               value={formData.bank_name}
-              placeholder="Auto-filled after verification"
-              editable={false} // Make non-editable
+              onChangeText={val => handleInputChange('bank_name', val)}
+              placeholder="Bank Name (Manual/Auto-filled)"
+              // Removed editable={false} to allow manual entry if verification isn't used
             />
             <CustomTextInput
-              label="Account Number*"
+              label="Account Number"
               value={formData.account_number}
               onChangeText={val => handleInputChange('account_number', val)}
               placeholder="Enter account number"
               keyboardType="number-pad"
             />
 
-            {/* --- NEW: IFSC Input + Verify Button --- */}
+            {/* IFSC Input + Verify Button */}
             <View style={styles.inputWithButtonContainer}>
               <CustomTextInput
-                label="IFSC Code*"
+                label="IFSC Code"
                 value={formData.ifsc}
                 onChangeText={val => handleInputChange('ifsc', val)}
                 placeholder="Enter IFSC code"
                 maxLength={11}
                 autoCapitalize="characters"
-                containerStyle={{ flex: 1, marginBottom: 0 }} // Remove margin from input
+                containerStyle={{ flex: 1, marginBottom: 0 }}
               />
               <TouchableOpacity
                 style={[
@@ -861,9 +848,9 @@ const RegisterScreen = () => {
                 )}
               </TouchableOpacity>
             </View>
-            {/* --- END: IFSC Input + Verify Button --- */}
+            {/* End: IFSC Input + Verify Button */}
 
-            {/* --- NEW: Verified Holder Name Display --- */}
+            {/* Verified Holder Name Display */}
             {isBankVerified && (
               <View style={styles.verifiedBankBox}>
                 <Text style={styles.verifiedBankText}>
@@ -871,9 +858,8 @@ const RegisterScreen = () => {
                 </Text>
               </View>
             )}
-            {/* --- END: Verified Holder Name Display --- */}
+            {/* End: Verified Holder Name Display */}
           </FormSection>
-          {/* --- *** END: UPDATED BANK DETAILS Section *** --- */}
 
           {/* Submit Button (Unchanged) */}
           <TouchableOpacity
@@ -905,7 +891,7 @@ const RegisterScreen = () => {
   );
 };
 
-// --- Styles (UPDATED) ---
+// --- Styles (Unchanged) ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F8FA' },
   keyboardAvoidingView: { flex: 1 },
@@ -1063,23 +1049,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   verifiedText: { color: '#4CAF50', fontWeight: 'bold', fontSize: 16 },
+  verifiedTextHint: {
+    color: '#4CAF50',
+    fontSize: 12,
+    marginTop: 4,
+  },
   pincodeSpinner: {
     position: 'absolute',
     right: 16,
     top: 48,
   },
-  // --- NEW STYLES for Bank Verification ---
   inputWithButtonContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end', // Aligns button to bottom of input wrapper
-    marginBottom: 16, // Margin for the whole row
+    alignItems: 'flex-end',
+    marginBottom: 16,
   },
   verifyButton: {
     backgroundColor: '#4A6CFF',
     borderRadius: 12,
     paddingHorizontal: 16,
     marginLeft: 10,
-    height: 55, // Match input height
+    height: 55,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1089,18 +1079,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   verifiedBankBox: {
-    backgroundColor: '#E8F5E9', // Green success color
+    backgroundColor: '#E8F5E9',
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
-    marginBottom: 16, // Add margin
+    marginBottom: 16,
   },
   verifiedBankText: {
-    color: '#4CAF50', // Green text
+    color: '#4CAF50',
     fontWeight: 'bold',
     fontSize: 14,
   },
-  // --- END NEW STYLES ---
 });
 
 export default RegisterScreen;

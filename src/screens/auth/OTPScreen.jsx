@@ -67,11 +67,12 @@ const OTPScreen = () => {
       if (response.data.success) {
         // Verification successful, get the final token
         const accessToken = response.data.data.access_token;
-
+        const userId = response.data.data.user.id
         if (accessToken) {
           // Save the final token and the phone number
           await AsyncStorage.setItem('@user_token', accessToken);
           await AsyncStorage.setItem('@user_phone_number', phoneNumber);
+          await AsyncStorage.setItem('@user_id', userId.toString());
           console.log('Access Token and phone number saved successfully!');
 
           showSnackbar('Phone number verified successfully!', 'success');

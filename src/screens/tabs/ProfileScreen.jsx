@@ -60,7 +60,7 @@ const ProfileScreen = () => {
             color="#4A6CFF"
             style={styles.menuIcon}
           />
-          <Text style={styles.menuItemText}>Edit Profile</Text>
+          <Text style={styles.menuItemText}>View Profile</Text>
           <Icon name="chevron-right" size={24} color="#C7C7CD" />
         </TouchableOpacity>
         <TouchableOpacity
@@ -82,17 +82,6 @@ const ProfileScreen = () => {
             style={styles.menuIcon}
           />
           <Text style={styles.menuItemText}>My Subscription</Text>
-          <Icon name="chevron-right" size={24} color="#C7C7CD" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem}>
-          <Icon
-            name="security"
-            size={24}
-            color="#4A6CFF"
-            style={styles.menuIcon}
-          />
-          <Text style={styles.menuItemText}>Account & Security</Text>
           <Icon name="chevron-right" size={24} color="#C7C7CD" />
         </TouchableOpacity>
 

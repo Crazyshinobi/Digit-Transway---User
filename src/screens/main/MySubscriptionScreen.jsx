@@ -206,14 +206,6 @@ const MySubscriptionScreen = () => {
             </Text>
           </View>
         </View>
-
-        {/* Button to view all plans */}
-        <TouchableOpacity
-          style={styles.browseButton}
-          onPress={() => navigation.navigate('Subscription')}
-        >
-          <Text style={styles.browseButtonText}>View All Plans</Text>
-        </TouchableOpacity>
       </ScrollView>
     );
   };
