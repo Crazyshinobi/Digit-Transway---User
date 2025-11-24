@@ -29,6 +29,7 @@ import Geolocation from 'react-native-geolocation-service';
 import { API_URL } from '../../config/config';
 import Snackbar from '../../components/Snackbar';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { getGeocode } from '../../utils/getGoeCode';
 
 // --- (Reusable Components) ---
 
@@ -42,14 +43,13 @@ const CustomTextInput = ({
   ...props
 }) => (
   <View style={[styles.inputContainer, containerStyle]}>
-      <Text style={styles.label}>{label}</Text> 
+    <Text style={styles.label}>{label}</Text>
     <View
       style={[
         styles.inputWrapper,
         !editable && styles.disabledInputWrapper, // Style for read-only
       ]}
     >
-        
       <TextInput
         style={styles.input}
         placeholderTextColor="#C7C7CD"
@@ -58,9 +58,7 @@ const CustomTextInput = ({
         editable={editable} // Pass editable to TextInput
         {...props}
       />
-       
     </View>
-    
   </View>
 );
 
@@ -73,8 +71,8 @@ const CustomDropdown = ({
   containerStyle,
 }) => (
   <View style={[styles.inputContainer, containerStyle]}>
-      <Text style={styles.label}>{label}</Text>
-     
+    <Text style={styles.label}>{label}</Text>
+
     <Dropdown
       style={styles.dropdown}
       placeholderStyle={styles.placeholderStyle}
@@ -89,7 +87,6 @@ const CustomDropdown = ({
       search
       searchPlaceholder="Search..."
     />
-    
   </View>
 );
 
@@ -112,8 +109,8 @@ const NewBookingScreen = () => {
     special_instructions: '',
     pickup_latitude: DEFAULT_LAT,
     pickup_longitude: DEFAULT_LNG,
-    drop_latitude: 19.076,
-    drop_longitude: 72.8777,
+    drop_latitude: null,
+    drop_longitude: null,
     distance_km: 0,
     payment_method: null,
     vendor_id: null,
@@ -223,6 +220,24 @@ const NewBookingScreen = () => {
       });
     }
   };
+
+  //   useEffect(() => {
+  //     console.log('new effect dropArea');
+
+  //   const fetchGeocode = async () => {
+  //     if (dropArea && dropState && dropPincode.length === 6) {
+  //       const result = await getGeocode(dropArea, dropPincode, dropState);
+
+  //       if (result) {
+  //         setDropLat(result.lat);
+  //         setDropLng(result.lng);
+  //         console.log("Drop Geocode:", result);
+  //       }
+  //     }
+  //   };
+
+  //   fetchGeocode();
+  // }, [dropArea, dropState, dropPincode]);
 
   const getCurrentLocation = () => {
     // ... (This function remains unchanged)
@@ -427,8 +442,72 @@ const NewBookingScreen = () => {
       }
     }
   }; // ------------------------- // --- Step 1: Find Available Vendors ---
+  // const handleFindVendors = async () => {
+  //   // ... (This function remains unchanged)
+
+  //   // const result = await getGeocode(
+  //   //   'Karyana kalan, Ludhiana , Punjab - 141015',
+  //   // );
+
+  //   // if (result) {
+  //   //   console.log('Lat:', result.latitude);
+  //   //   console.log('Lng:', result.longitude);
+  //   //   console.log('Formatted:', result.formattedAddress);
+  //   // }
+
+  //   // console.log('[Find Vendors] Booking Data:', bookingData.pickup_address);
+  //   // return;
+  //   const requiredFields = ['vehicle_model_id', 'material_weight'];
+  //   for (const field of requiredFields) {
+  //     if (!bookingData[field]) {
+  //       showSnackbar(
+  //         `Please fill out ${field.replace('_', ' ')} first.`,
+  //         'error',
+  //       );
+  //       return;
+  //     }
+  //   }
+
+  //   setFindingVendors(true);
+  //   setAvailableVendors([]);
+  //   setSelectedVendor(null);
+  //   setPriceCalculated(false);
+  //   setCalculatedData(null);
+
+  //   try {
+  //     const token = await AsyncStorage.getItem('@user_token');
+  //     if (!token) throw new Error('Token not found.');
+
+  //     const payload = {
+  //       pickup_latitude: bookingData.pickup_latitude,
+  //       pickup_longitude: bookingData.pickup_longitude,
+  //       vehicle_model_id: bookingData.vehicle_model_id,
+  //       material_weight: parseFloat(bookingData.material_weight) || 0,
+  //     };
+
+  //     console.log('[Find Vendors] Sending payload:', payload);
+  //     const response = await axios.post(
+  //       `${API_URL}/api/truck-booking/available-vendors`,
+  //       payload,
+  //       {
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       },
+  //     );
+
+  //     if (response.data.success) {
+  //       setAvailableVendors(response.data.data.vehicles || []);
+  //       showSnackbar(response.data.message || 'Vendors found!', 'success');
+  //     } else {
+  //       throw new Error(response.data.message || 'No vendors found.');
+  //     }
+  //   } catch (err) {
+  //     showSnackbar(err.response?.data?.message || err.message, 'error');
+  //   } finally {
+  //     setFindingVendors(false);
+  //   }
+  // }; // --- Step 2: Calculate Price for Selected Vendor ---
+
   const handleFindVendors = async () => {
-    // ... (This function remains unchanged)
     const requiredFields = ['vehicle_model_id', 'material_weight'];
     for (const field of requiredFields) {
       if (!bookingData[field]) {
@@ -440,6 +519,12 @@ const NewBookingScreen = () => {
       }
     }
 
+    // Check both addresses
+    if (!bookingData.pickup_address || !bookingData.drop_address) {
+      showSnackbar('Please fill pickup and drop address first.', 'error');
+      return;
+    }
+
     setFindingVendors(true);
     setAvailableVendors([]);
     setSelectedVendor(null);
@@ -447,23 +532,50 @@ const NewBookingScreen = () => {
     setCalculatedData(null);
 
     try {
+      // Step 1: Get Pickup Geocode
+      const pickupGeo = await getGeocode(bookingData.pickup_address);
+
+      // Step 2: Get Drop Geocode
+      const dropGeo = await getGeocode(bookingData.drop_address);
+
+      // Validate geocode results
+      if (!pickupGeo || !dropGeo) {
+        showSnackbar(
+          'Having trouble finding locations, please try again later.',
+          'error',
+        );
+        return;
+      }
+
+      console.log('[Geocode] Pickup:', pickupGeo);
+      console.log('[Geocode] Drop:', dropGeo);
+
+      // Step 3: Update bookingData with geolocation
+      setBookingData(prev => ({
+        ...prev,
+        pickup_latitude: pickupGeo.latitude,
+        pickup_longitude: pickupGeo.longitude,
+        drop_latitude: dropGeo.latitude,
+        drop_longitude: dropGeo.longitude,
+      }));
+
+      // Step 4: Proceed with vendor fetching
       const token = await AsyncStorage.getItem('@user_token');
       if (!token) throw new Error('Token not found.');
 
       const payload = {
-        pickup_latitude: bookingData.pickup_latitude,
-        pickup_longitude: bookingData.pickup_longitude,
+        pickup_latitude: pickupGeo.latitude,
+        pickup_longitude: pickupGeo.longitude,
         vehicle_model_id: bookingData.vehicle_model_id,
         material_weight: parseFloat(bookingData.material_weight) || 0,
       };
 
       console.log('[Find Vendors] Sending payload:', payload);
+
       const response = await axios.post(
         `${API_URL}/api/truck-booking/available-vendors`,
         payload,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (response.data.success) {
@@ -475,9 +587,10 @@ const NewBookingScreen = () => {
     } catch (err) {
       showSnackbar(err.response?.data?.message || err.message, 'error');
     } finally {
+      console.log('--- Finished Finding Vendors ---',bookingData);
       setFindingVendors(false);
     }
-  }; // --- Step 2: Calculate Price for Selected Vendor ---
+  };
 
   const handleSelectAndCalculatePrice = async vendor => {
     // ... (This function remains unchanged, including enhanced logging)
@@ -664,38 +777,32 @@ const NewBookingScreen = () => {
         onPress={() => handleSelectAndCalculatePrice(item)}
         disabled={calculatingPriceForVendor !== null}
       >
-           
         <Image
           source={{
             uri: item.vehicle_image || 'https://via.placeholder.com/100',
           }}
           style={styles.vendorImage}
         />
-           
+
         <View style={styles.vendorInfo}>
-               <Text style={styles.vendorName}>{item.vendor_name}</Text> 
-            
+          <Text style={styles.vendorName}>{item.vendor_name}</Text>
+
           <Text style={styles.vendorVehicle}>{item.vehicle_brand_model}</Text>
-             
+
           <Text style={styles.vendorDistance}>
-                  {item.distance_km.toFixed(1)} km away •
-            {item.estimated_arrival}    
+            {item.distance_km.toFixed(1)} km away •{item.estimated_arrival}
           </Text>
-              
+
           <View style={styles.vendorRating}>
-                  <Icon name="star" size={16} color="#FFC107" />    
-            
+            <Icon name="star" size={16} color="#FFC107" />
+
             <Text style={styles.vendorRatingText}>
-                     {item.rating} ({item.trips_completed} trips)    
-               
+              {item.rating} ({item.trips_completed} trips)
             </Text>
-                
           </View>
-             
         </View>
-           
+
         <View style={styles.vendorPriceContainer}>
-              
           {/* {isCalculating ? (
             <ActivityIndicator color="#4A6CFF" />
           ) : item.pricing?.total_price !== undefined ? (
@@ -705,13 +812,11 @@ const NewBookingScreen = () => {
           ) : (
             <Text style={styles.vendorPrice}>N/A</Text>
           )} */}
-              
+
           {isSelected && !isCalculating && (
             <Icon name="check-circle" size={24} color="#4CAF50" />
           )}
-             
         </View>
-          
       </TouchableOpacity>
     );
   };
@@ -719,8 +824,8 @@ const NewBookingScreen = () => {
   if (loadingFormData) {
     return (
       <SafeAreaView style={styles.centered}>
-            <ActivityIndicator size="large" color="#4A6CFF" />   
-        <Text style={styles.loadingText}>Loading booking options...</Text>  
+        <ActivityIndicator size="large" color="#4A6CFF" />
+        <Text style={styles.loadingText}>Loading booking options...</Text>
       </SafeAreaView>
     );
   }
@@ -730,30 +835,28 @@ const NewBookingScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />  
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
-           
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-               <Text style={styles.headerIcon}>←</Text>   
+          <Text style={styles.headerIcon}>←</Text>
         </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create New Booking</Text>
-            <View style={{ width: 40 }} />  
+        <Text style={styles.headerTitle}>Create New Booking</Text>
+        <View style={{ width: 40 }} />
       </View>
-        
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
-           
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
         >
-               <Text style={styles.sectionTitle}>Load Details</Text>
-              
+          <Text style={styles.sectionTitle}>Load Details</Text>
+
           <CustomDropdown
             label="Material Type*"
             data={materials}
@@ -761,7 +864,7 @@ const NewBookingScreen = () => {
             onChange={item => handleInputChange('material_id', item.value)}
             placeholder="Select material"
           />
-              
+
           <CustomTextInput
             label="Material Weight (tons)*"
             value={bookingData.material_weight}
@@ -769,7 +872,7 @@ const NewBookingScreen = () => {
             placeholder="e.g., 5.5"
             keyboardType="numeric"
           />
-              
+
           <CustomDropdown
             label="Truck Specification*"
             data={vehicleModels}
@@ -777,35 +880,34 @@ const NewBookingScreen = () => {
             onChange={item => handleInputChange('vehicle_model_id', item.value)}
             placeholder="Select truck type"
           />
-               <Text style={styles.sectionTitle}>Route Details</Text>  
-            {/* --- NEW: Conditional Location Logic --- */}    
+          <Text style={styles.sectionTitle}>Route Details</Text>
+          {/* --- NEW: Conditional Location Logic --- */}
           {isPrefillingLocation ? (
             <View style={styles.centeredSmall}>
-                     <ActivityIndicator size="large" color="#4A6CFF" />
-                   
+              <ActivityIndicator size="large" color="#4A6CFF" />
+
               <Text style={styles.loadingText}>
                 Loading previous locations...
               </Text>
-                   
             </View>
           ) : prefilledLocations ? (
             <>
-                     {/* --- Show Pre-filled Pickup Location --- */}
-                    
+              {/* --- Show Pre-filled Pickup Location --- */}
+
               <CustomTextInput
                 label="Pickup Location (Pre-filled)"
                 value={prefilledLocations.pickup.address}
                 editable={false}
               />
-                     {/* --- Show Pre-filled Drop Location --- */}
-                    
+              {/* --- Show Pre-filled Drop Location --- */}
+
               <CustomTextInput
                 label="Drop Location (Pre-filled)"
                 value={prefilledLocations.drop.address}
                 editable={false}
               />
-                     {/* --- Add a button to clear this --- */}    
-               
+              {/* --- Add a button to clear this --- */}
+
               <TouchableOpacity
                 style={styles.clearButton}
                 onPress={() => {
@@ -824,18 +926,14 @@ const NewBookingScreen = () => {
                   requestLocationPermission(); // Get current location
                 }}
               >
-                       
                 <Text style={styles.clearButtonText}>
                   Enter locations manually
                 </Text>
-                      
               </TouchableOpacity>
-                   
             </>
           ) : (
             <>
-                     {/* --- Original Pickup Address Flow --- */}
-                    
+              {/* --- Original Pickup Address Flow --- */}
               <CustomTextInput
                 label="Pickup Pincode*"
                 value={pickupPincode}
@@ -844,14 +942,12 @@ const NewBookingScreen = () => {
                 keyboardType="number-pad"
                 maxLength={6}
               />
-                    
               {isPickupLoading && (
                 <ActivityIndicator
                   style={{ marginVertical: 10 }}
                   color="#4A6CFF"
                 />
               )}
-                    
               {pickupLocations.length > 0 && !isPickupLoading && (
                 <CustomDropdown
                   label="Select Pickup Location*"
@@ -863,8 +959,8 @@ const NewBookingScreen = () => {
                   placeholder="Select from list"
                 />
               )}
-                     {/* --- Original Drop Address Flow --- */}
-               _      
+              {/* --- Original Drop Address Flow --- */}
+              _
               <CustomTextInput
                 label="Drop Pincode*"
                 value={dropPincode}
@@ -873,14 +969,12 @@ const NewBookingScreen = () => {
                 keyboardType="number-pad"
                 maxLength={6}
               />
-                    
               {isDropLoading && (
                 <ActivityIndicator
                   style={{ marginVertical: 10 }}
                   color="#4A6CFF"
                 />
               )}
-                    
               {dropLocations.length > 0 && !isDropLoading && (
                 <CustomDropdown
                   label="Select Drop Location*"
@@ -892,10 +986,9 @@ const NewBookingScreen = () => {
                   placeholder="Select from list"
                 />
               )}
-                   
             </>
           )}
-               {/* ----------------------------- */}    
+          {/* ----------------------------- */}
           <TouchableOpacity
             style={[
               styles.secondaryButton,
@@ -904,71 +997,55 @@ const NewBookingScreen = () => {
             onPress={handleFindVendors}
             disabled={!canFindVendors || findingVendors}
           >
-                 
             {findingVendors ? (
               <ActivityIndicator color="#4A6CFF" />
             ) : (
               <Text style={styles.secondaryButtonText}>
-                        Find Available Vendors       
+                Find Available Vendors
               </Text>
             )}
-                
           </TouchableOpacity>
-              
+
           {availableVendors.length > 0 && ( // ... (Vendor list rendering remains unchanged)
             <View>
-                    
               <Text style={styles.sectionTitle}>Select a Vendor</Text>
-                    
+
               <FlatList
                 data={availableVendors}
                 renderItem={renderVendorCard}
                 keyExtractor={item => item.vendor_id.toString()}
               />
-                   
             </View>
           )}
-              
+
           {priceCalculated &&
             calculatedData && ( // ... (Price details rendering remains unchanged)
               <View style={styles.calculatedSection}>
-                      
-                <Text style={styles.sectionTitle}>Final Price Details</Text> 
-                    
+                <Text style={styles.sectionTitle}>Final Price Details</Text>
+
                 <View style={styles.detailRow}>
-                         
-                  <Text style={styles.detailLabel}>Vendor:</Text>       
+                  <Text style={styles.detailLabel}>Vendor:</Text>
                   <Text style={styles.detailValue}>
-                             {calculatedData.vendor?.name || 'N/A'} 
-                         
+                    {calculatedData.vendor?.name || 'N/A'}
                   </Text>
-                        
                 </View>
-                      
+
                 <View style={styles.detailRow}>
-                         
-                  <Text style={styles.detailLabel}>Vehicle:</Text>      
-                  
+                  <Text style={styles.detailLabel}>Vehicle:</Text>
+
                   <Text style={styles.detailValue}>
-                            
-                    {calculatedData.vendor?.vehicle_model || 'N/A'}      
-                    
+                    {calculatedData.vendor?.vehicle_model || 'N/A'}
                   </Text>
-                        
                 </View>
-                      
+
                 <View style={styles.detailRow}>
-                         
-                  <Text style={styles.detailLabel}>Distance:</Text>      
-                  
+                  <Text style={styles.detailLabel}>Distance:</Text>
+
                   <Text style={styles.detailValue}>
-                            
-                    {calculatedData.trip_details?.distance_text || 'N/A'}   
-                       
+                    {calculatedData.trip_details?.distance_text || 'N/A'}
                   </Text>
-                        
                 </View>
-                      
+
                 {calculatedData.pricing?.is_editable && (
                   <CustomTextInput
                     label="Adjust Price (Optional)"
@@ -983,23 +1060,19 @@ const NewBookingScreen = () => {
                     containerStyle={{ marginTop: 10 }}
                   />
                 )}
-                     
               </View>
             )}
-              
+
           {priceCalculated && ( // ... (Schedule & Payment rendering remains unchanged)
             <>
-                    
-              <Text style={styles.sectionTitle}>Schedule & Payment</Text>   
-                 <Text style={styles.label}>Pickup Date & Time*</Text>   
-                
+              <Text style={styles.sectionTitle}>Schedule & Payment</Text>
+              <Text style={styles.label}>Pickup Date & Time*</Text>
+
               <TouchableOpacity
                 style={styles.dateInputWrapper}
                 onPress={() => setDatePickerOpen(true)}
               >
-                       
                 <Text style={styles.dateText}>
-                          
                   {bookingData.pickup_datetime.toLocaleString([], {
                     year: 'numeric',
                     month: 'short',
@@ -1007,13 +1080,11 @@ const NewBookingScreen = () => {
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
-                         
                 </Text>
-                       
-                <Icon name="calendar-today" size={20} color="#8A8A8E" />   
-                  
+
+                <Icon name="calendar-today" size={20} color="#8A8A8E" />
               </TouchableOpacity>
-                    
+
               <DatePicker
                 modal
                 open={datePickerOpen}
@@ -1025,7 +1096,7 @@ const NewBookingScreen = () => {
                 onCancel={() => setDatePickerOpen(false)}
                 minimumDate={new Date()}
               />
-                    
+
               <CustomDropdown
                 label="Payment Method*"
                 data={paymentMethods}
@@ -1035,7 +1106,7 @@ const NewBookingScreen = () => {
                 }
                 placeholder="Select when to pay"
               />
-                    
+
               <CustomTextInput
                 label="Special Instructions (Optional)"
                 value={bookingData.special_instructions}
@@ -1045,7 +1116,7 @@ const NewBookingScreen = () => {
                 placeholder="e.g., Handle with care"
                 multiline
               />
-                    
+
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
@@ -1055,28 +1126,22 @@ const NewBookingScreen = () => {
                 onPress={handleCreateBooking}
                 disabled={!priceCalculated || bookingLoading}
               >
-                       
                 {bookingLoading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryButtonText}>Request Booking</Text>
                 )}
-                      
               </TouchableOpacity>
-                   
             </>
           )}
-             
         </ScrollView>
-          
       </KeyboardAvoidingView>
-        
+
       <Snackbar
         message={snackbar.message}
         visible={snackbar.visible}
         type={snackbar.type}
       />
-       
     </SafeAreaView>
   );
 };
