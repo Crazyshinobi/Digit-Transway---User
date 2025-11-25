@@ -1,5 +1,3 @@
-// src/screens/auth/AuthLoadingScreen.js
-
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -16,7 +14,6 @@ const AuthLoadingScreen = () => {
       let storedPhoneNumber = null;
 
       try {
-        // 1. Check local storage
         token = await AsyncStorage.getItem('@user_token');
         storedPhoneNumber = await AsyncStorage.getItem('@user_phone_number');
         console.log("Token", token)
@@ -29,7 +26,6 @@ const AuthLoadingScreen = () => {
         console.log('[AuthLoading] Session found. Checking registration status...');
         console.log('Token', token);
 
-        // 2. Check Registration Status
         const statusResponse = await axios.post(
           `${API_URL}/api/auth/check-user-status`,
           { contact_number: storedPhoneNumber },
@@ -50,7 +46,6 @@ const AuthLoadingScreen = () => {
 
         console.log('[AuthLoading] Registration complete. Checking subscription...');
 
-        // 3. Check Subscription Status
         const subscriptionResponse = await axios.get(
           `${API_URL}/api/plans/subscriptions`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -72,10 +67,9 @@ const AuthLoadingScreen = () => {
 
       } catch (e) {
         console.error('[AuthLoading] Auth check/API call failed:', e.message);
-        // Clear potentially invalid data on any error
         await AsyncStorage.removeItem('@user_token');
         await AsyncStorage.removeItem('@user_phone_number');
-        navigation.replace('Login'); // Fallback to Login
+        navigation.replace('Login'); 
       }
     };
 

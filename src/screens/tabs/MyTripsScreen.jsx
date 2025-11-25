@@ -18,8 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/config';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Snackbar from '../../components/Snackbar';
+import { Linking } from 'react-native';
 
-// Helper function to format the material and weight
 const formatMaterial = item => {
   const material = item.material?.name || 'N/A';
   const weight =
@@ -29,28 +29,22 @@ const formatMaterial = item => {
   return `${material} (${weight})`;
 };
 
-// Helper function to get the correct pickup date/time string
 const getPickupDate = item => {
-  // Check if pickup_formatted is available in schedule (for pending/active)
   if (item.schedule?.pickup_formatted) {
     return item.schedule.pickup_formatted;
   }
-  // Check if pickup_scheduled is available in timeline (for completed)
   if (item.timeline?.pickup_scheduled?.formatted) {
     return item.timeline.pickup_scheduled.formatted;
   }
-  // Fallback to the old date format if necessary
   return item.pickup_datetime
     ? new Date(item.pickup_datetime).toLocaleDateString()
     : 'N/A';
 };
 
-const BookingItem = ({ item, navigation }) => {
-  // Determine the status text to display
+const BookingItem = ({ item, navigation, onReviewSubmitted }) => {
   const statusText =
     item.status_label || item.status?.toUpperCase() || 'UNKNOWN';
 
-  // Extract necessary details from the complex JSON structure
   const vendorName = item.vendor?.name || 'Vendor N/A';
   const vehicleReg = item.vendor?.vehicle_registration_number || 'N/A';
   const vehicleType = item.vendor?.vehicle_type || item.vehicle?.model || 'N/A';
@@ -58,10 +52,9 @@ const BookingItem = ({ item, navigation }) => {
     item.pricing?.display || item.final_price || item.estimated_price || 'N/A';
   const distanceDisplay = item.distance?.display || 'N/A';
 
-  // Determine image source correctly: URI or local asset
   const imageSource = item.vehicle_image
     ? { uri: item.vehicle_image }
-    : 'https://placehold.co/600x400'; // Use local import `placeholder`
+    : 'https://placehold.co/600x400';
 
   return (
     <View style={styles.bookingCard}>
@@ -93,6 +86,23 @@ const BookingItem = ({ item, navigation }) => {
           {vehicleType} ({vehicleReg})
         </Text>
       </View>
+
+      <TouchableOpacity
+        onPress={() => {
+          if (item.vendor?.contact_number) {
+            Linking.openURL(`tel:${item.vendor.contact_number}`);
+          }
+        }}
+        style={styles.callDriverButton}
+      >
+        <Icon
+          name="call"
+          size={18}
+          color="#FFFFFF"
+          style={{ marginRight: 6 }}
+        />
+        <Text style={styles.callDriverButtonText}>Call Driver</Text>
+      </TouchableOpacity>
 
       <View style={styles.divider} />
 
@@ -135,25 +145,28 @@ const BookingItem = ({ item, navigation }) => {
       </View>
 
       {/* --- ADD REVIEW BUTTON CONDITIONALLY --- */}
-      {item.status === 'completed' && (
-        <TouchableOpacity
-          style={styles.reviewButton}
-          onPress={() => {
-            navigation.navigate('ReviewScreen', {
-              bookingId: item.id,
-              vendorId: item.vendor?.id, // Use nested vendor ID
-            });
-          }}
-        >
-          <Icon
-            name="star-rate"
-            size={18}
-            color="#FFFFFF"
-            style={{ marginRight: 5 }}
-          />
-          <Text style={styles.reviewButtonText}>Add Review & Rating</Text>
-        </TouchableOpacity>
-      )}
+
+      {item.status === 'completed' &&
+        Number(item.rating_is_available) === 0 && (
+          <TouchableOpacity
+            style={styles.reviewButton}
+            onPress={() => {
+              navigation.navigate('ReviewScreen', {
+                bookingId: item.id,
+                vendorId: item.vendor?.id, // Use nested vendor ID
+                onReviewSubmitted,
+              });
+            }}
+          >
+            <Icon
+              name="star-rate"
+              size={18}
+              color="#FFFFFF"
+              style={{ marginRight: 5 }}
+            />
+            <Text style={styles.reviewButtonText}>Add Review & Rating</Text>
+          </TouchableOpacity>
+        )}
     </View>
   );
 };
@@ -184,15 +197,12 @@ const BookingList = ({ status }) => {
       const token = await AsyncStorage.getItem('@user_token');
       if (!token) throw new Error('Token not found.');
 
-      // Note: The API endpoint for "active" in your response payload actually contains "pending" and "confirmed".
-      // Assuming your backend handles the status mapping correctly based on the URL suffix.
       const endpoint = `${API_URL}/api/truck-booking/my-bookings/${status}`;
 
       const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.data.success) {
-        // If the response structure has 'data.bookings', use that.
         setBookings(response.data.data.bookings || []);
       } else {
         throw new Error(
@@ -222,6 +232,13 @@ const BookingList = ({ status }) => {
     fetchBookingsForStatus();
   }, [fetchBookingsForStatus]);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchBookingsForStatus();
+    });
+    return unsubscribe;
+  }, [navigation, fetchBookingsForStatus]);
+
   if (loading && !refreshing) {
     return (
       <View style={styles.centered}>
@@ -249,7 +266,11 @@ const BookingList = ({ status }) => {
       <FlatList
         data={bookings}
         renderItem={({ item }) => (
-          <BookingItem item={item} navigation={navigation} />
+          <BookingItem
+            item={item}
+            navigation={navigation}
+            onReviewSubmitted={fetchBookingsForStatus} // <-- PASS IT HERE
+          />
         )}
         keyExtractor={item => item.id?.toString() || Math.random().toString()}
         contentContainerStyle={styles.listContainer}
@@ -261,6 +282,7 @@ const BookingList = ({ status }) => {
           />
         }
       />
+
       <Snackbar
         message={snackbar.message}
         visible={snackbar.visible}
@@ -431,6 +453,21 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   tabStyle: { width: 'auto', paddingHorizontal: 16 },
+  callDriverButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    elevation: 2,
+  },
+  callDriverButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 export default MyTripsScreen;

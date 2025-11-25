@@ -119,18 +119,17 @@ const ReviewScreen = () => {
       const token = await AsyncStorage.getItem('@user_token');
       if (!token) throw new Error('Authentication token not found.');
 
-      // Inside handleSubmitReview:
+      // Debug logs
       console.log('--- Submission Debugging ---');
       console.log('userId:', userId, 'Type:', typeof userId);
       console.log('bookingId:', bookingId, 'Type:', typeof bookingId);
       console.log('rating:', rating, 'Type:', typeof rating);
       console.log('vendorId:', vendorId, 'Type:', typeof vendorId);
       console.log('----------------------------');
-      // ... rest of the function
 
       const reviewPayload = {
         booking_id: bookingId,
-        user_id: userId, // Use the correctly retrieved integer ID
+        user_id: userId,
         vendor_id: vendorId,
         rating: rating,
         comment: comment.trim(),
@@ -146,8 +145,22 @@ const ReviewScreen = () => {
 
       if (response.data.status) {
         showSnackbar('Review added successfully!', 'success');
-        // Navigate back after successful submission
-        setTimeout(() => navigation.goBack(), 1500);
+
+        // If caller passed a refresh callback, call it BEFORE navigating back.
+        // This allows the bookings list to refetch and reflect the updated rating state.
+        try {
+          const refreshCallback = route?.params?.onReviewSubmitted;
+          if (refreshCallback && typeof refreshCallback === 'function') {
+            // Await it in case it's async
+            await refreshCallback();
+          }
+        } catch (cbErr) {
+          // Don't block navigation if callback fails
+          console.warn('onReviewSubmitted callback failed:', cbErr);
+        }
+
+        // Go back immediately (list will already have been asked to refresh)
+        navigation.goBack();
       } else {
         const message = response.data.message || 'Failed to submit review.';
         throw new Error(message);

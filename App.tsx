@@ -35,7 +35,7 @@ function App() {
       />
       <NavigationContainer>
         <Stack.Navigator
-          initialRouteName="AuthLoading" // Start with the loading screen
+          initialRouteName="AuthLoading" 
           screenOptions={{ headerShown: false }}
         >
           <Stack.Screen name="AuthLoading" component={AuthLoadingScreen} />

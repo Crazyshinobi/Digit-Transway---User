@@ -5,20 +5,21 @@ import {
   ActivityIndicator,
   BackHandler,
   Alert,
+  Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AadhaarWebView = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const webViewRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   const { verificationUrl, onVerificationComplete } = route.params;
 
   useEffect(() => {
-    // Handle Android back button
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
@@ -35,23 +36,21 @@ const AadhaarWebView = () => {
     );
 
     return () => backHandler.remove();
-  }, []);
+  }, [navigation]);
 
   const handleNavigationStateChange = navState => {
     const { url } = navState;
     console.log('WebView URL:', url);
 
-    // Check if we've reached the callback URL
-    if (url.includes('/aadhaar-callback')) {
+    if (url && url.includes('/aadhaar-callback')) {
       console.log('Callback detected:', url);
 
-      // Extract parameters from URL
-      const urlParams = new URLSearchParams(url.split('?')[1]);
+      const query = url.split('?')[1] || '';
+      const urlParams = new URLSearchParams(query);
       const clientId = urlParams.get('client_id');
       const status = urlParams.get('status');
 
       if (clientId) {
-        // Close WebView and pass data back
         navigation.goBack();
         if (onVerificationComplete) {
           onVerificationComplete(clientId, status);
@@ -70,25 +69,29 @@ const AadhaarWebView = () => {
     );
   };
 
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 0);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <WebView
-        ref={webViewRef}
-        source={{ uri: verificationUrl }}
-        onNavigationStateChange={handleNavigationStateChange}
-        onError={handleError}
-        startInLoadingState={true}
-        renderLoading={() => (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A6CFF" />
-          </View>
-        )}
-        style={styles.webView}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        thirdPartyCookiesEnabled={true}
-        sharedCookiesEnabled={true}
-      />
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <View style={[styles.webViewWrapper, { paddingBottom: bottomPadding }]}>
+        <WebView
+          ref={webViewRef}
+          source={{ uri: verificationUrl }}
+          onNavigationStateChange={handleNavigationStateChange}
+          onError={handleError}
+          startInLoadingState={true}
+          renderLoading={() => (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A6CFF" />
+            </View>
+          )}
+          style={styles.webView}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          thirdPartyCookiesEnabled={true}
+          sharedCookiesEnabled={true}
+        />
+      </View>
     </SafeAreaView>
   );
 };
@@ -97,6 +100,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  webViewWrapper: {
+    flex: 1,
   },
   webView: {
     flex: 1,
